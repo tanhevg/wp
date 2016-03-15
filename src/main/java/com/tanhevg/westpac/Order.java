@@ -1,8 +1,5 @@
 package com.tanhevg.westpac;
 
-/**
- * Created by tanhevg on 05/03/2016.
- */
 public class Order {
 
     // private variables

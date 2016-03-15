@@ -1,45 +1,90 @@
 package com.tanhevg.westpac;
 
-import gnu.trove.map.TLongObjectMap;
-import gnu.trove.map.hash.TLongObjectHashMap;
-
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 /**
- * Created by tanhevg on 05/03/2016.
+ * todo rather than using <code>DecoratedOrder.isRemoved()</code> here, re-use the
+ * <code>orderById</code> map
  */
-public class Level {
+class Level {
     private long totalSize;
-    private TLongObjectMap<DecoratedOrder> orderById = new TLongObjectHashMap<>();
+    private final ArrayList<DecoratedOrder> orders = new ArrayList<>();
+    private final PurgeStrategy purgeStrategy;
+    private int removeCount;
 
-
-    public void addOrder(DecoratedOrder o) {
-        orderById.put(o.getId(), o);
-        totalSize += o.getSize();
-        o.setQueuePosition(orderById.size());
+    Level(PurgeStrategy purgeStrategy) {
+        this.purgeStrategy = purgeStrategy;
     }
 
-    public void modify(DecoratedOrder o, long newSize) {
+    void addOrder(DecoratedOrder o) {
+        orders.add(o);
+        totalSize += o.getSize();
+        o.setQueuePosition(orders.size());
+    }
+
+    void modify(DecoratedOrder o, long newSize) {
         totalSize += (newSize - o.getSize());
         o.setSize(newSize);
     }
 
-    public void remove(DecoratedOrder o) {
+    void remove(DecoratedOrder o) {
         totalSize -= o.getSize();
-        orderById.remove(o.getId());
+        o.setRemoved(true);
+        purge(o);
     }
 
-    public long getTotalSize() {
+    private void purge(DecoratedOrder o) {
+        int purgeRemoveCount = purgeStrategy.getRemoveCount();
+        if (purgeRemoveCount == 1) {
+            orders.remove(Collections.binarySearch(orders, o));
+        } else if (purgeRemoveCount > 0 && ++removeCount == purgeRemoveCount) {
+            removeCount = 0;
+            for (Iterator<DecoratedOrder> iterator = orders.iterator(); iterator.hasNext(); ) {
+                DecoratedOrder order = iterator.next();
+                if (order.isRemoved()) {
+                    iterator.remove();
+                }
+            }
+        }
+    }
+
+    long getTotalSize() {
         return totalSize;
     }
 
-    // todo re-work
-    public List<DecoratedOrder> getList() {
-        List<DecoratedOrder> ret = new ArrayList<>();
-        ret.addAll(orderById.valueCollection());
-        Collections.sort(ret, (o1, o2) ->
-                o1.getQueuePosition() - o2.getQueuePosition());
-        return ret;
+    Iterator<Order> iterator() {
+        return new LevelIterator(); //todo use object pool; release back when hasNext() returns false
+    }
+
+    private class LevelIterator implements Iterator<Order> {
+        int index;
+
+        @Override
+        public boolean hasNext() {
+            return advanceToRealOrder();
+        }
+
+        @Override
+        public Order next() {
+            if (!advanceToRealOrder()) {
+                throw new NoSuchElementException(String.valueOf(index));
+            }
+            return orders.get(index++).getOrder();
+        }
+
+        private boolean advanceToRealOrder() {
+            while (orders.size() > index && orders.get(index).isRemoved()) {
+                if (purgeStrategy.removeInIterator()) {
+                    orders.remove(index);
+                } else {
+                    index++;
+                }
+            }
+            return index < orders.size();
+        }
     }
 
 }

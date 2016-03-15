@@ -4,22 +4,25 @@ import gnu.trove.list.array.TDoubleArrayList;
 import gnu.trove.map.TDoubleObjectMap;
 import gnu.trove.map.hash.TDoubleObjectHashMap;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 
-/**
- * Created by tanhevg on 05/03/2016.
- */
-public class SideOrderBook {
+class SideOrderBook {
     private boolean bid;
     private final TDoubleObjectMap<Level> levelByPrice = new TDoubleObjectHashMap<>();
     private final TDoubleArrayList sortedPrices = new TDoubleArrayList();
+    private final PurgeStrategy purgeStrategy;
 
-    public SideOrderBook(boolean bid) {
-        this.bid = bid;
+    boolean isEmpty() {
+        return levelByPrice.size() == 0;
     }
 
-    public void add(DecoratedOrder order) {
+    SideOrderBook(boolean bid, PurgeStrategy purgeStrategy) {
+        this.bid = bid;
+        this.purgeStrategy = purgeStrategy;
+    }
+
+    void add(DecoratedOrder order) {
         Level level = levelByPrice.get(order.getPrice());
         if (level != null) {
             level.addOrder(order);
@@ -29,7 +32,7 @@ public class SideOrderBook {
     }
 
 
-    public void remove(DecoratedOrder o) {
+    void remove(DecoratedOrder o) {
         Level level = levelByPrice.get(o.getPrice());
         level.remove(o);
         if (level.getTotalSize() == 0) {
@@ -39,17 +42,17 @@ public class SideOrderBook {
     }
 
 
-    public void modify(DecoratedOrder o, long newSize) {
+    void modify(DecoratedOrder o, long newSize) {
         Level level = levelByPrice.get(o.getPrice());
         level.modify(o, newSize);
     }
 
     private int bidAskLevel(int level) {
-        return bid ? sortedPrices.size() - level  - 1 : level;
+        return bid ? sortedPrices.size() - level - 1 : level;
     }
 
 
-    public double getPrice(int level) {
+    double getPrice(int level) {
         validateLevel(level);
         return sortedPrice(level - 1);
     }
@@ -61,7 +64,7 @@ public class SideOrderBook {
     }
 
 
-    public long getSize(int level) {
+    long getSize(int level) {
         validateLevel(level);
         return sortedLevel(level - 1).getTotalSize();
     }
@@ -69,23 +72,10 @@ public class SideOrderBook {
     private void addLevel(DecoratedOrder order) {
         int insertionPoint = sortedPrices.binarySearch(order.getPrice());
         insertionPoint = -(insertionPoint + 1);
-        Level level = new Level();
+        Level level = new Level(purgeStrategy); //todo use object pool
         level.addOrder(order);
         levelByPrice.put(order.getPrice(), level);
         sortedPrices.insert(insertionPoint, order.getPrice());
-    }
-
-
-    // todo rework
-    public List<Order> getOrders() {
-        List<Order> ret = new ArrayList<>();
-        for (int i = 0; i < sortedPrices.size(); i++) {
-            Level level = sortedLevel(i);
-            for (DecoratedOrder order : level.getList()) {
-                ret.add(order.getOrder());
-            }
-        }
-        return ret;
     }
 
     private Level sortedLevel(int i) {
@@ -94,5 +84,39 @@ public class SideOrderBook {
 
     private double sortedPrice(int i) {
         return sortedPrices.get(bidAskLevel(i));
+    }
+
+    Iterator<Order> iterator() {
+        return new SideIterator(); //todo use object pool; release back when hasNext() returns false
+    }
+
+    private class SideIterator implements Iterator<Order> {
+        private int levelIndex;
+        private Iterator<Order> levelIterator;
+
+        SideIterator() {
+            if (levelIndex < levelByPrice.size()) {
+                levelIterator = sortedLevel(0).iterator();
+            }
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (levelIterator == null) {
+                return false;
+            }
+            while (!levelIterator.hasNext() && levelIndex < levelByPrice.size() - 1) {
+                levelIterator = sortedLevel(++levelIndex).iterator();
+            }
+            return levelIndex < levelByPrice.size() && levelIterator.hasNext();
+        }
+
+        @Override
+        public Order next() {
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return levelIterator.next();
+        }
     }
 }

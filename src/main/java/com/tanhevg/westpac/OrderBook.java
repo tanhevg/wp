@@ -4,23 +4,25 @@ import gnu.trove.map.TLongObjectMap;
 import gnu.trove.map.hash.TLongObjectHashMap;
 
 import java.util.HashMap;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 
-/**
- * Created by tanhevg on 05/03/2016.
- */
 public class OrderBook {
 
     private final TLongObjectMap<DecoratedOrder> orderById = new TLongObjectHashMap<>();
     private final Map<String, SymbolOrderBook> orderBookBySymbol = new HashMap<>();
+    private final PurgeStrategy purgeStrategy;
+
+    public OrderBook(PurgeStrategy purgeStrategy) {
+        this.purgeStrategy = purgeStrategy;
+    }
 
     public void add(Order o) {
         DecoratedOrder order = new DecoratedOrder(o);// todo use object pool;
         orderById.put(order.getId(), order);
 
         SymbolOrderBook book = orderBookBySymbol.computeIfAbsent(o.getSym(),
-                sym -> new SymbolOrderBook(orderById));
+                sym -> new SymbolOrderBook(purgeStrategy));
         book.add(order);
     }
 
@@ -30,7 +32,11 @@ public class OrderBook {
         if (order == null) {
             return false;
         }
-        getSymbolOrderBook(order.getSym()).remove(order);
+        SymbolOrderBook symbolOrderBook = getSymbolOrderBook(order.getSym());
+        symbolOrderBook.remove(order);
+        if (symbolOrderBook.isEmpty()) {
+            orderBookBySymbol.remove(order.getSym());
+        }
         return true;
     }
 
@@ -55,8 +61,8 @@ public class OrderBook {
     }
 
 
-    public List<Order> getOrders(String symbol, char side) {
-        return getSymbolOrderBook(symbol).getOrders(side);
+    public Iterator<Order> iterator(String symbol, char side) {
+        return getSymbolOrderBook(symbol).iterator(side);
     }
 
     private SymbolOrderBook getSymbolOrderBook(String symbol) {

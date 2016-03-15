@@ -1,50 +1,57 @@
 package com.tanhevg.westpac;
 
-/**
- * Created by tanhevg on 05/03/2016.
- */
-public class DecoratedOrder {
+class DecoratedOrder implements Comparable<DecoratedOrder> {
     private Order order;
 
     private int queuePosition;
+    private boolean removed;
 
-    public DecoratedOrder(Order order) {
+    DecoratedOrder(Order order) {
         this.order = order;
     }
 
-    public Order getOrder() {
+    Order getOrder() {
         return order;
     }
 
-    public int getQueuePosition() {
-        return queuePosition;
-    }
-
-    public void setQueuePosition(int queuePosition) {
+    void setQueuePosition(int queuePosition) {
         this.queuePosition = queuePosition;
     }
 
-    public void setSize(long newSize) {
+    void setSize(long newSize) {
         order.size = newSize;
     }
 
-    public long getId() {
+    long getId() {
         return order.getId();
     }
 
-    public char getSide() {
+    char getSide() {
         return order.getSide();
     }
 
-    public double getPrice() {
+    double getPrice() {
         return order.getPrice();
     }
 
-    public long getSize() {
+    long getSize() {
         return order.getSize();
     }
 
-    public String getSym() {
+    String getSym() {
         return order.getSym();
+    }
+
+    boolean isRemoved() {
+        return removed;
+    }
+
+    void setRemoved(boolean removed) {
+        this.removed = removed;
+    }
+
+    @Override
+    public int compareTo(DecoratedOrder o) {
+        return this.queuePosition - o.queuePosition;
     }
 }

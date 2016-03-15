@@ -1,19 +1,14 @@
 package com.tanhevg.westpac;
 
-import gnu.trove.map.TLongObjectMap;
+import java.util.Iterator;
 
-import java.util.List;
-
-/**
- * Created by tanhevg on 05/03/2016.
- */
-public class SymbolOrderBook {
+class SymbolOrderBook {
     private final SideOrderBook bidBook;
     private final SideOrderBook askBook;
 
-    public SymbolOrderBook(TLongObjectMap<DecoratedOrder> orderById) {
-        bidBook = new SideOrderBook(true);
-        askBook = new SideOrderBook(false);
+    SymbolOrderBook(PurgeStrategy purgeStrategy) {
+        bidBook = new SideOrderBook(true, purgeStrategy);
+        askBook = new SideOrderBook(false, purgeStrategy);
 
     }
 
@@ -27,32 +22,44 @@ public class SymbolOrderBook {
         }
     }
 
-    public void add(DecoratedOrder o) {
+    void add(DecoratedOrder o) {
         getOrderBook(o.getSide()).add(o);
     }
 
 
-    public void remove(DecoratedOrder o) {
+    void remove(DecoratedOrder o) {
         getOrderBook(o.getSide()).remove(o);
     }
 
 
-    public void modify(DecoratedOrder o, long newSize) {
+    void modify(DecoratedOrder o, long newSize) {
         getOrderBook(o.getSide()).modify(o, newSize);
     }
 
 
-    public double getPrice( char side, int level) {
+    double getPrice(char side, int level) {
         return getOrderBook(side).getPrice(level);
     }
 
 
-    public long getSize(char side, int level) {
+    long getSize(char side, int level) {
         return getOrderBook(side).getSize(level);
     }
 
 
-    public List<Order> getOrders(char side) {
-        return getOrderBook(side).getOrders();
+    Iterator<Order> iterator(char side) {
+        return getOrderBook(side).iterator();
+    }
+
+    boolean isEmpty() {
+        return bidBook.isEmpty() && askBook.isEmpty();
+    }
+
+    boolean hasBid() {
+        return !bidBook.isEmpty();
+    }
+
+    boolean hasAsk() {
+        return !askBook.isEmpty();
     }
 }
